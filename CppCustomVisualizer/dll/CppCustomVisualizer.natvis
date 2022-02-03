@@ -9,9 +9,9 @@ For information about natvis files see: https://docs.microsoft.com/en-us/visuals
 
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
-  <Type Name="_FILETIME">
+  <Type Name="entity">
     <!--NOTE: The 'VisualizerId' is also specified in the .vsdconfigxml to control which
     implementation of IDkmCustomVisualizer is used.-->
-    <CustomVisualizer VisualizerId="8E723FD7-611E-40E7-98C0-624D8873F559"/>
+    <CustomVisualizer VisualizerId="6BF85D4B-AE39-4DCF-99EE-D4914C6C919E"/>
   </Type>
 </AutoVisualizer>

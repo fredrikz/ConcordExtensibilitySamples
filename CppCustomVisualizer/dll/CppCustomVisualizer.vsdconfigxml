@@ -23,19 +23,21 @@ For more information about this file, see https://github.com/Microsoft/ConcordEx
   can be done with the 'Create GUID' tool ('Tools->Create GUID' in Visual Sudio or 
   guidgen.exe from the command line). -->
 
+  <!--ComponentId="{184B8704-E76C-454A-991F-351D9AB15CFC}"-->
   <NativeComponent
-    ComponentId="{184B8704-E76C-454A-991F-351D9AB15CFC}"
+    ComponentId="{F1A826DC-ECF2-45E0-B1A3-D9184D662FD1}"
     ComponentLevel="9991500"
     ModuleName="CppCustomVisualizer.dll">
     <!--NOTE: For more information on ComponentLevel, see https://github.com/Microsoft/ConcordExtensibilitySamples/wiki/Component-Levels -->
-
-    <Class Name="CCppCustomVisualizerService" ClassId="{9535F50E-1738-4AE2-8507-5207C44B8261}" WorkerProcessSupported="true">
+    <!--<Class Name="CCppCustomVisualizerService" ClassId="{9535F50E-1738-4AE2-8507-5207C44B8261}" WorkerProcessSupported="true">-->
+    <Class Name="CCppCustomVisualizerService" ClassId="{F9E54E9E-FF50-48B9-B1BC-A1D6A8AC8F0A}" WorkerProcessSupported="true">
 
       <Implements>
         <InterfaceGroup>
           <Filter>
             <!--NOTE: This VisualizerId is also used in the .natvis file.-->
-            <VisualizerId RequiredValue="8E723FD7-611E-40E7-98C0-624D8873F559"/>
+            <!--<VisualizerId RequiredValue="8E723FD7-611E-40E7-98C0-624D8873F559"/>-->
+            <VisualizerId RequiredValue="6BF85D4B-AE39-4DCF-99EE-D4914C6C919E"/>
           </Filter>
           <Interface Name="IDkmCustomVisualizer"/>
         </InterfaceGroup>

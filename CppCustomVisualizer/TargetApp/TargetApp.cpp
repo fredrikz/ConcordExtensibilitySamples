@@ -5,14 +5,15 @@
 
 #include <iostream>
 #include <windows.h>
+#include "entity.h"
 
 class MyClass
 {
-    const FILETIME m_fileTime;
+    const entity m_fileTime;
     const int m_anotherField;
 
 public:
-    MyClass(const FILETIME& ft, int anotherField) :
+    MyClass(const entity& ft, int anotherField) :
         m_fileTime(ft),
         m_anotherField(anotherField)
     {
@@ -21,19 +22,13 @@ public:
 
 int wmain(int argc, WCHAR* argv[])
 {
-    FILETIME creationTime;
-    HANDLE hFile = CreateFile(argv[0], GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (hFile == INVALID_HANDLE_VALUE)
-        return -1;
+    entity creationTime = { 1, 2, 3 };
 
-    if (!GetFileTime(hFile, &creationTime, nullptr, nullptr))
-        return -1;
-
-    FILETIME* pPointerTest1 = &creationTime;
-    FILETIME* pPointerTest2 = nullptr;
+    entity* pPointerTest1 = &creationTime;
+    entity* pPointerTest2 = nullptr;
     MyClass c(creationTime, 12);
 
-    FILETIME FTZero = {};
+    entity FTZero = { 0, 0, 0 };
 
     __debugbreak(); // program will stop here. Evaluate 'creationTime' and 'pPointerTest' in the locals or watch window.
     std::cout << "Test complete\n";

@@ -5,6 +5,7 @@
 
 #include "stdafx.h"
 #include "_EntryPoint.h"
+#include "../TargetApp/entity.h"
 
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpression(
     _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
@@ -34,7 +35,7 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
 
     // Read the FILETIME value from the target process
     DkmProcess* pTargetProcess = pVisualizedExpression->RuntimeInstance()->Process();
-    FILETIME value;
+    entity value;
     hr = pTargetProcess->ReadMemory(pPointerValueHome->Address(), DkmReadMemoryFlags::None, &value, sizeof(value), nullptr);
     if (FAILED(hr))
     {
@@ -44,12 +45,7 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
 
     // Format this FILETIME as a string
     CString strValue;
-    hr = FileTimeToText(value, /*ref*/strValue);
-    if (FAILED(hr))
-    {
-        strValue = "<Invalid Value>";
-    }
-
+    entity_to_text(value, /*ref*/strValue);
     CString strEditableValue;
 
     // If we are formatting a pointer, we want to also show the address of the pointer
@@ -177,47 +173,20 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::UseDefaultEvaluationBehav
     // step would be unnecessary if we were evaluating a different expression that resulted in a type which
     // we didn't visualize.
     CComPtr<DkmInspectionContext> pInspectionContext;
-    if (DkmComponentManager::IsApiVersionSupported(DkmApiVersion::VS16RTMPreview))
-    {
-        // If we are running in VS 16 or newer, use this overload...
-        hr = DkmInspectionContext::Create(
-            pParentInspectionContext->InspectionSession(),
-            pParentInspectionContext->RuntimeInstance(),
-            pParentInspectionContext->Thread(),
-            pParentInspectionContext->Timeout(),
-            DkmEvaluationFlags::TreatAsExpression |
+    // If we are running in VS 16 or newer, use this overload...
+    hr = DkmInspectionContext::Create(
+        pParentInspectionContext->InspectionSession(),
+        pParentInspectionContext->RuntimeInstance(),
+        pParentInspectionContext->Thread(), pParentInspectionContext->Timeout(),
+        DkmEvaluationFlags::TreatAsExpression |
             DkmEvaluationFlags::ShowValueRaw,
-            pParentInspectionContext->FuncEvalFlags(),
-            pParentInspectionContext->Radix(),
-            pParentInspectionContext->Language(),
-            pParentInspectionContext->ReturnValue(),
-            (Evaluation::DkmCompiledVisualizationData*)nullptr,
-            Evaluation::DkmCompiledVisualizationDataPriority::None,
-            pParentInspectionContext->ReturnValues(),
-            pParentInspectionContext->SymbolsConnection(),
-            &pInspectionContext
-            );
-    }
-    else
-    {
-        // Otherwise fall back to the Visual Studio 14 version
-        hr = DkmInspectionContext::Create(
-            pParentInspectionContext->InspectionSession(),
-            pParentInspectionContext->RuntimeInstance(),
-            pParentInspectionContext->Thread(),
-            pParentInspectionContext->Timeout(),
-            DkmEvaluationFlags::TreatAsExpression |
-            DkmEvaluationFlags::ShowValueRaw,
-            pParentInspectionContext->FuncEvalFlags(),
-            pParentInspectionContext->Radix(),
-            pParentInspectionContext->Language(),
-            pParentInspectionContext->ReturnValue(),
-            (Evaluation::DkmCompiledVisualizationData*)nullptr,
-            Evaluation::DkmCompiledVisualizationDataPriority::None,
-            pParentInspectionContext->ReturnValues(),
-            &pInspectionContext
-            );
-    }
+        pParentInspectionContext->FuncEvalFlags(),
+        pParentInspectionContext->Radix(), pParentInspectionContext->Language(),
+        pParentInspectionContext->ReturnValue(),
+        (Evaluation::DkmCompiledVisualizationData *)nullptr,
+        Evaluation::DkmCompiledVisualizationDataPriority::None,
+        pParentInspectionContext->ReturnValues(),
+        pParentInspectionContext->SymbolsConnection(), &pInspectionContext);
     if (FAILED(hr))
     {
         return hr;
@@ -285,96 +254,9 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetUnderlyingString(
     return E_NOTIMPL;
 }
 
-HRESULT CCppCustomVisualizerService::FileTimeToText(const FILETIME& fileTime, CString& text)
-{
-    text.Empty();
-
-    SYSTEMTIME systemTime;
-    if (!FileTimeToSystemTime(&fileTime, &systemTime))
-    {
-        return WIN32_LAST_ERROR();
-    }
-
-    int cch;
-
-    // Deterime how much to allocate for the date
-    cch = GetDateFormatW(
-        GetThreadLocale(),
-        DATE_SHORTDATE,
-        &systemTime,
-        nullptr,
-        nullptr,
-        0
-        );
-    if (cch == 0)
-    {
-        return WIN32_LAST_ERROR();
-    }
-
-    int allocLength = cch
-        - 1 // To convert from a character count (including null terminator) to a length
-        + 1; // For the space (' ') character between the date and time
-
-    // Deterime how much to allocate for the time
-    cch = GetTimeFormatW(
-        GetThreadLocale(),
-        /*flags*/0,
-        &systemTime,
-        nullptr,
-        nullptr,
-        0
-        );
-    if (cch == 0)
-    {
-        return WIN32_LAST_ERROR();
-    }
-
-    allocLength += (cch - 1); // '-1' is to convert from a character count (including null terminator) to a length
-    CString result;
-    LPWSTR pBuffer = result.GetBuffer(allocLength);
-
-    // Add the date
-    cch = GetDateFormatW(
-        GetThreadLocale(),
-        DATE_SHORTDATE,
-        &systemTime,
-        nullptr,
-        pBuffer,
-        allocLength+1
-        );
-    if (cch == 0)
-    {
-        return WIN32_LAST_ERROR();
-    }
-
-    pBuffer += (cch-1); // '-1' is to convert from a character count (including null terminator) to a length
-    int remainaingLength = allocLength - (cch-1);
-
-    // Add a space between the date and the time
-    if (remainaingLength <= 1)
-    {
-        return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
-    }
-    *pBuffer = ' ';
-    pBuffer++;
-    remainaingLength--;
-
-    // Add the time
-    cch = GetTimeFormatW(
-        GetThreadLocale(),
-        /*flags*/0,
-        &systemTime,
-        nullptr,
-        pBuffer,
-        remainaingLength + 1 // '+1' is for null terminator
-        );
-    if (cch == 0)
-    {
-        return WIN32_LAST_ERROR();
-    }
-
-    result.ReleaseBuffer();
-    text = result;
-
-    return S_OK;
+void CCppCustomVisualizerService::entity_to_text(const entity &e,
+                                                 CString &text) {
+  text = _T("<unable to resolve entity>");
+  //LPWSTR pBuffer = text.GetBuffer(allocLength);
+  //text.ReleaseBuffer();
 }

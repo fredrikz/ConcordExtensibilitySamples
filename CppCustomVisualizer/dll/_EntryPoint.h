@@ -8,6 +8,7 @@
 
 #include "CppCustomVisualizer.Contract.h"
 
+struct entity;
 class ATL_NO_VTABLE CCppCustomVisualizerService :
     // Inherit from CCppCustomVisualizerServiceContract to provide the list of interfaces that
     // this class implements (interface list comes from CppCustomVisualizer.vsdconfigxml)
@@ -70,7 +71,7 @@ public:
         );
 
 private:
-    static HRESULT FileTimeToText(const FILETIME& fileTime, CString& text);
+    static void entity_to_text(const entity& e, CString& text);
 };
 
 OBJECT_ENTRY_AUTO(CCppCustomVisualizerService::ClassId, CCppCustomVisualizerService)
