@@ -45,6 +45,11 @@ public:
         _Out_ bool* pUseDefaultEvaluationBehavior,
         _Deref_out_opt_ Evaluation::DkmEvaluationResult** ppDefaultEvaluationResult
         );
+    HRESULT STDMETHODCALLTYPE EvaluateOtherExpression(
+        _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
+        const wchar_t* expr,
+        _Deref_out_opt_ Evaluation::DkmEvaluationResult** ppDefaultEvaluationResult
+        );
     HRESULT STDMETHODCALLTYPE GetChildren(
         _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
         _In_ UINT32 InitialRequestSize,
