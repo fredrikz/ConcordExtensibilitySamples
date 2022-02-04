@@ -37,14 +37,14 @@ const wchar_t *entity_manager_get_visualizer_data(entity_manager *mgr,
 
   // HAXX
   const cool_comp_1* c1 = mgr->_comp1s[e->_id - 1];
-  if ( c1 ) {
-
-  }
   const cool_comp_2* c2 = mgr->_comp2s[e->_id - 1];
-  if ( c2 ) {
 
+  if ( c1 && c2 ) {
+    return L"2";
   }
-
-  return L"TODO";
+  else if ( c1 || c2 ) {
+    return L"1";
+  }
+  return L"0";
 }
 

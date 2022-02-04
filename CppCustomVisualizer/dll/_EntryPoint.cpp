@@ -26,14 +26,25 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
         return E_NOTIMPL;
     }
 
-    DkmRootVisualizedExpression* pRootVisualizedExpression = DkmRootVisualizedExpression::TryCast(pVisualizedExpression);
-    if (pRootVisualizedExpression == nullptr)
-    {
-        // This sample doesn't provide child evaluation results, so only root expressions are expected
+    DkmRootVisualizedExpression* pRootVisualizedExpression = nullptr;
+    DkmVisualizedExpression* pTestVisualizedExpression = pVisualizedExpression;
+    for (;;) {
+      pRootVisualizedExpression = DkmRootVisualizedExpression::TryCast(pTestVisualizedExpression);
+      if (pRootVisualizedExpression)
+      {
+        break;
+      }
+
+      DkmChildVisualizedExpression* pChildVisualizedExpression = DkmChildVisualizedExpression::TryCast( pTestVisualizedExpression );
+
+      if ( pChildVisualizedExpression ) {
+        pTestVisualizedExpression = pChildVisualizedExpression->Parent();
+      }
+      else {
         return E_NOTIMPL;
+      }
     }
 
-    // Read the FILETIME value from the target process
     DkmProcess* pTargetProcess = pVisualizedExpression->RuntimeInstance()->Process();
     entity value;
     hr = pTargetProcess->ReadMemory(pPointerValueHome->Address(), DkmReadMemoryFlags::None, &value, sizeof(value), nullptr);
@@ -64,9 +75,6 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
       DkmString* success_value = success->Value();
       strValue = success_value->Value();
     }
-
-    CComPtr<DkmString> expr_result_other;
-    pEEEvaluationResultOther->GetUnderlyingString( &expr_result_other );
 
     // Format this FILETIME as a string
     CString strEditableValue;
@@ -159,76 +167,9 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::UseDefaultEvaluationBehav
     _Deref_out_opt_ Evaluation::DkmEvaluationResult** ppDefaultEvaluationResult
     )
 {
-    HRESULT hr;
-
-    // This method is called by the expression evaluator when a visualized expression's children are
-    // being expanded, or the value is being set. We just want to delegate this back to the C++ EE.
-    // So we need to set `*pUseDefaultEvaluationBehavior` to true and return the evaluation result which would
-    // be created if this custom visualizer didn't exist.
-    //
-    // NOTE: If this custom visualizer supported underlying strings (no DkmEvaluationResultFlags::RawString),
-    // this method would also be called when that is requested.
-
-    DkmRootVisualizedExpression* pRootVisualizedExpression = DkmRootVisualizedExpression::TryCast(pVisualizedExpression);
-    if (pRootVisualizedExpression == nullptr)
-    {
-        // This sample doesn't provide child evaluation results, so only root expressions are expected
-        return E_NOTIMPL;
-    }
-
-    DkmInspectionContext* pParentInspectionContext = pVisualizedExpression->InspectionContext();
-
-    CAutoDkmClosePtr<DkmLanguageExpression> pLanguageExpression;
-    hr = DkmLanguageExpression::Create(
-        pParentInspectionContext->Language(),
-        DkmEvaluationFlags::TreatAsExpression,
-        pRootVisualizedExpression->FullName(),
-        DkmDataItem::Null(),
-        &pLanguageExpression
-        );
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    // Create a new inspection context with 'DkmEvaluationFlags::ShowValueRaw' set. This is important because
-    // the result of the expression is a FILETIME, and we don't want our visualizer to be invoked again. This
-    // step would be unnecessary if we were evaluating a different expression that resulted in a type which
-    // we didn't visualize.
-    CComPtr<DkmInspectionContext> pInspectionContext;
-    // If we are running in VS 16 or newer, use this overload...
-    hr = DkmInspectionContext::Create(
-        pParentInspectionContext->InspectionSession(),
-        pParentInspectionContext->RuntimeInstance(),
-        pParentInspectionContext->Thread(), pParentInspectionContext->Timeout(),
-        DkmEvaluationFlags::TreatAsExpression |
-            DkmEvaluationFlags::ShowValueRaw,
-        pParentInspectionContext->FuncEvalFlags(),
-        pParentInspectionContext->Radix(), pParentInspectionContext->Language(),
-        pParentInspectionContext->ReturnValue(),
-        (Evaluation::DkmCompiledVisualizationData *)nullptr,
-        Evaluation::DkmCompiledVisualizationDataPriority::None,
-        pParentInspectionContext->ReturnValues(),
-        pParentInspectionContext->SymbolsConnection(), &pInspectionContext);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    CComPtr<DkmEvaluationResult> pEEEvaluationResult;
-    hr = pVisualizedExpression->EvaluateExpressionCallback(
-        pInspectionContext,
-        pLanguageExpression,
-        pVisualizedExpression->StackFrame(),
-        &pEEEvaluationResult
-        );
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    *ppDefaultEvaluationResult = pEEEvaluationResult.Detach();
-    *pUseDefaultEvaluationBehavior = true;
+    (void)pVisualizedExpression;
+    (void)ppDefaultEvaluationResult;
+    *pUseDefaultEvaluationBehavior = false;
     return S_OK;
 }
 
@@ -244,21 +185,6 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateOtherExpression(
     if (FAILED(hr))
     {
         return hr;
-    }
-
-    // This method is called by the expression evaluator when a visualized expression's children are
-    // being expanded, or the value is being set. We just want to delegate this back to the C++ EE.
-    // So we need to set `*pUseDefaultEvaluationBehavior` to true and return the evaluation result which would
-    // be created if this custom visualizer didn't exist.
-    //
-    // NOTE: If this custom visualizer supported underlying strings (no DkmEvaluationResultFlags::RawString),
-    // this method would also be called when that is requested.
-
-    DkmRootVisualizedExpression* pRootVisualizedExpression = DkmRootVisualizedExpression::TryCast(pVisualizedExpression);
-    if (pRootVisualizedExpression == nullptr)
-    {
-        // This sample doesn't provide child evaluation results, so only root expressions are expected
-        return E_NOTIMPL;
     }
 
 #define FLAGS                                                                  \
@@ -279,12 +205,7 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateOtherExpression(
         return hr;
     }
 
-    // Create a new inspection context with 'DkmEvaluationFlags::ShowValueRaw' set. This is important because
-    // the result of the expression is a FILETIME, and we don't want our visualizer to be invoked again. This
-    // step would be unnecessary if we were evaluating a different expression that resulted in a type which
-    // we didn't visualize.
     CComPtr<DkmInspectionContext> pInspectionContext;
-    // If we are running in VS 16 or newer, use this overload...
     hr = DkmInspectionContext::Create(
         pParentInspectionContext->InspectionSession(),
         pParentInspectionContext->RuntimeInstance(),
@@ -318,6 +239,7 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateOtherExpression(
     return S_OK;
 }
 
+// NOTE: https://github.com/microsoft/cppwinrt/blob/master/natvis/object_visualizer.cpp has a good sample of this
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetChildren(
     _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
     _In_ UINT32 InitialRequestSize,
@@ -326,20 +248,100 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetChildren(
     _Deref_out_ Evaluation::DkmEvaluationResultEnumContext** ppEnumContext
     )
 {
-    // This sample delegates expansion to the C++ EE, so this method doesn't need to be implemented
+  HRESULT hr;
+    Evaluation::DkmPointerValueHome* pPointerValueHome = Evaluation::DkmPointerValueHome::TryCast(pVisualizedExpression->ValueHome());
+    if (pPointerValueHome == nullptr)
+    {
+        // This sample only handles visualizing in-memory FILETIME structures
+        return E_NOTIMPL;
+    }
+    DkmProcess* pTargetProcess = pVisualizedExpression->RuntimeInstance()->Process();
+    entity value;
+    hr = pTargetProcess->ReadMemory(pPointerValueHome->Address(), DkmReadMemoryFlags::None, &value, sizeof(value), nullptr);
+    if (FAILED(hr))
+    {
+        // If the bytes of the value cannot be read from the target process, just fall back to the default visualization
+        return E_NOTIMPL;
+    }
+
+    const UINT64 entity_address = pPointerValueHome->Address();
+    CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
+    CString expr;
+    expr.Format(L"entity_manager_get_visualizer_data(s_entity_manager,(const "
+                L"struct entity*)0x%08x%08x)",
+                static_cast<DWORD>(entity_address >> 32),
+                static_cast<DWORD>(entity_address));
+    hr = EvaluateOtherExpression(pVisualizedExpression, (LPCTSTR)expr,
+                                 &pEEEvaluationResultOther);
+    if (FAILED(hr)) {
+      return hr;
+    }
+
+    if ( pEEEvaluationResultOther->TagValue() == DkmEvaluationResult::Tag::SuccessResult ) {
+      DkmSuccessEvaluationResult* success = DkmSuccessEvaluationResult::TryCast( pEEEvaluationResultOther );
+      DkmString* success_value = success->Value();
+
+      const wchar_t num = *(wcschr( success_value->Value(), L'"' ) + 1);
+
+      UINT32 max_out = InitialRequestSize;
+      if ( num >= L'0' && num <= L'9' ) {
+        max_out = UINT32(num - L'0');
+      }
+      else {
+        max_out = 0;
+      }
+
+      CComPtr<DkmEvaluationResultEnumContext> pEnumContext;
+      hr = DkmEvaluationResultEnumContext::Create(
+          max_out, pVisualizedExpression->StackFrame(), pInspectionContext,
+          DkmDataItem::Null(), &pEnumContext);
+      DkmAllocArray(0, pInitialChildren);
+      *ppEnumContext = pEnumContext.Detach();
+
+      return S_OK;
+    }
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetItems(
-    _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
-    _In_ Evaluation::DkmEvaluationResultEnumContext* pEnumContext,
-    _In_ UINT32 StartIndex,
-    _In_ UINT32 Count,
-    _Out_ DkmArray<Evaluation::DkmChildVisualizedExpression*>* pItems
-    )
-{
-    // This sample delegates expansion to the C++ EE, so this method doesn't need to be implemented
-    return E_NOTIMPL;
+    _In_ Evaluation::DkmVisualizedExpression *pVisualizedExpression,
+    _In_ Evaluation::DkmEvaluationResultEnumContext *pEnumContext,
+    _In_ UINT32 StartIndex, _In_ UINT32 Count,
+    _Out_ DkmArray<Evaluation::DkmChildVisualizedExpression *> *pItems) {
+  HRESULT hr;
+  hr = DkmAllocArray(Count, pItems);
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  Evaluation::DkmPointerValueHome *pPointerValueHome =
+      Evaluation::DkmPointerValueHome::TryCast(
+          pVisualizedExpression->ValueHome());
+  for (UINT32 i = StartIndex; i < StartIndex + Count; ++i) {
+    DkmChildVisualizedExpression **children = pItems->Members;
+    DkmChildVisualizedExpression **pChild = &children[i];
+
+    CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
+    CString expr;
+    expr.Format(L"\"Comp %i\"", i);
+    hr = EvaluateOtherExpression(pVisualizedExpression, (LPCTSTR)expr,
+                                 &pEEEvaluationResultOther);
+
+    if ( pEEEvaluationResultOther->TagValue() == DkmEvaluationResult::Tag::SuccessResult ) {
+      DkmSuccessEvaluationResult* success = DkmSuccessEvaluationResult::TryCast( pEEEvaluationResultOther );
+      int i = 0;
+      ++i;
+    }
+
+    DkmChildVisualizedExpression::Create(
+        pVisualizedExpression->InspectionContext(),
+        pVisualizedExpression->VisualizerId(),
+        pVisualizedExpression->SourceId(), pVisualizedExpression->StackFrame(),
+        pPointerValueHome, pEEEvaluationResultOther.Detach(),
+        pVisualizedExpression, i, DkmDataItem::Null(), pChild );
+  }
+
+  return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::SetValueAsString(
@@ -363,9 +365,3 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetUnderlyingString(
     return E_NOTIMPL;
 }
 
-void CCppCustomVisualizerService::entity_to_text(const entity &e,
-                                                 CString &text) {
-  text = _T("<unable to resolve entity>");
-  //LPWSTR pBuffer = text.GetBuffer(allocLength);
-  //text.ReleaseBuffer();
-}

@@ -74,9 +74,6 @@ public:
         _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
         _Deref_out_opt_ DkmString** ppStringValue
         );
-
-private:
-    static void entity_to_text(const entity& e, CString& text);
 };
 
 OBJECT_ENTRY_AUTO(CCppCustomVisualizerService::ClassId, CCppCustomVisualizerService)
