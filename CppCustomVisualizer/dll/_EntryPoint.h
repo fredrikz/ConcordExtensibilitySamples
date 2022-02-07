@@ -10,6 +10,11 @@
 #include <vector>
 #include <string>
 
+struct name_and_expr {
+  std::wstring _name; // Optional
+  std::wstring _expr;
+};
+
 struct entity;
 class ATL_NO_VTABLE CCppCustomVisualizerService :
     // Inherit from CCppCustomVisualizerServiceContract to provide the list of interfaces that
@@ -49,7 +54,8 @@ public:
         );
     HRESULT STDMETHODCALLTYPE EvaluateOtherExpression(
         _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
-        const wchar_t* expr,
+        _In_ DkmEvaluationFlags_t extra_flags,
+        _In_ const wchar_t* expr,
         _Deref_out_opt_ Evaluation::DkmEvaluationResult** ppDefaultEvaluationResult
         );
     HRESULT STDMETHODCALLTYPE GetChildren(
@@ -81,7 +87,7 @@ public:
     HRESULT
     evaluate_entity(Evaluation::DkmVisualizedExpression *pVisualizedExpression,
                     Evaluation::DkmPointerValueHome *pPointerValueHome,
-                    std::vector<std::wstring> &out);
+                    std::vector<name_and_expr> &out);
 };
 
 OBJECT_ENTRY_AUTO(CCppCustomVisualizerService::ClassId, CCppCustomVisualizerService)

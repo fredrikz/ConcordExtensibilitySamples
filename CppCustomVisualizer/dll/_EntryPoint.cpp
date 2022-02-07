@@ -47,9 +47,12 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
       }
     }
 
-    DkmProcess* pTargetProcess = pVisualizedExpression->RuntimeInstance()->Process();
+    DkmProcess *pTargetProcess =
+        pVisualizedExpression->RuntimeInstance()->Process();
+    const UINT64 entity_address = pPointerValueHome->Address();
     entity value;
-    hr = pTargetProcess->ReadMemory(pPointerValueHome->Address(), DkmReadMemoryFlags::None, &value, sizeof(value), nullptr);
+    hr = pTargetProcess->ReadMemory(entity_address, DkmReadMemoryFlags::None,
+                                    &value, sizeof(value), nullptr);
     if (FAILED(hr))
     {
         // If the bytes of the value cannot be read from the target process, just fall back to the default visualization
@@ -59,15 +62,14 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
     CString strValue;
     strValue = _T("<unable to resolve entity>");
 
-    const UINT64 entity_address = pPointerValueHome->Address();
     CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
     CString expr;
-    expr.Format(L"entity_manager_get_visualizer_data(s_entity_manager,(const "
-                L"struct entity*)0x%08x%08x)",
+    expr.Format(L"(struct entity*)0x%08x%08x",
                 static_cast<DWORD>(entity_address >> 32),
                 static_cast<DWORD>(entity_address));
-    hr = EvaluateOtherExpression(pVisualizedExpression, (LPCTSTR)expr,
-                                 &pEEEvaluationResultOther);
+    hr = EvaluateOtherExpression(pVisualizedExpression,
+                                 DkmEvaluationFlags::ShowValueRaw,
+                                 (LPCTSTR)expr, &pEEEvaluationResultOther);
     if (FAILED(hr)) {
       return hr;
     }
@@ -108,13 +110,6 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
         return hr;
     }
 
-    CComPtr<DkmString> pEditableValue;
-    hr = DkmString::Create(strEditableValue, &pEditableValue);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
     CComPtr<DkmDataAddress> pAddress;
     hr = DkmDataAddress::Create(pVisualizedExpression->RuntimeInstance(), pPointerValueHome->Address(), nullptr, &pAddress);
     if (FAILED(hr))
@@ -122,12 +117,9 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
         return hr;
     }
 
-    DkmEvaluationResultFlags_t resultFlags = DkmEvaluationResultFlags::Expandable;
-    if (strEditableValue.IsEmpty())
-    {
-        // We only allow editting pointers, so mark non-pointers as read-only
-        resultFlags |= DkmEvaluationResultFlags::ReadOnly;
-    }
+    const DkmEvaluationResultFlags_t resultFlags =
+        DkmEvaluationResultFlags::Expandable |
+        DkmEvaluationResultFlags::ReadOnly;
 
     CComPtr<DkmSuccessEvaluationResult> pSuccessEvaluationResult;
     hr = DkmSuccessEvaluationResult::Create(
@@ -137,7 +129,7 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpress
         pRootVisualizedExpression->FullName(),
         resultFlags,
         pValue,
-        pEditableValue,
+        nullptr,
         pRootVisualizedExpression->Type(),
         DkmEvaluationResultCategory::Class,
         DkmEvaluationResultAccessType::None,
@@ -176,75 +168,66 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::UseDefaultEvaluationBehav
 }
 
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateOtherExpression(
-    _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
-    const wchar_t* expr,
-    _Deref_out_opt_ Evaluation::DkmEvaluationResult** ppDefaultEvaluationResult
-    )
-{
-    HRESULT hr;
-    CComPtr<DkmString> pValue;
-    hr = DkmString::Create(DkmSourceString(expr), &pValue);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
+    _In_ Evaluation::DkmVisualizedExpression *pVisualizedExpression,
+    _In_ DkmEvaluationFlags_t extra_flags, _In_ const wchar_t *expr,
+    _Deref_out_opt_ Evaluation::DkmEvaluationResult *
+        *ppDefaultEvaluationResult) {
+  HRESULT hr;
+  CComPtr<DkmString> pValue;
+  hr = DkmString::Create(DkmSourceString(expr), &pValue);
+  if (FAILED(hr)) {
+    return hr;
+  }
 
-#define FLAGS                                                                  \
-  DkmEvaluationFlags::ForceRealFuncEval | DkmEvaluationFlags::ForceEvaluationNow
-    DkmInspectionContext* pParentInspectionContext = pVisualizedExpression->InspectionContext();
+  const DkmEvaluationFlags_t FLAGS = DkmEvaluationFlags::ForceRealFuncEval |
+                                     DkmEvaluationFlags::ForceEvaluationNow |
+                                     DkmEvaluationFlags::NoRawView |
+                                     extra_flags;
+  DkmInspectionContext *pParentInspectionContext =
+      pVisualizedExpression->InspectionContext();
 
-    CAutoDkmClosePtr<DkmLanguageExpression> pLanguageExpression;
-    hr = DkmLanguageExpression::Create(
-        pParentInspectionContext->Language(),
-        FLAGS,
-        pValue,
-        DkmDataItem::Null(),
-        &pLanguageExpression
-        );
+  CAutoDkmClosePtr<DkmLanguageExpression> pLanguageExpression;
+  hr = DkmLanguageExpression::Create(pParentInspectionContext->Language(),
+                                     FLAGS, pValue, DkmDataItem::Null(),
+                                     &pLanguageExpression);
 
-    if (FAILED(hr))
-    {
-        return hr;
-    }
+  if (FAILED(hr)) {
+    return hr;
+  }
 
-    CComPtr<DkmInspectionContext> pInspectionContext;
-    hr = DkmInspectionContext::Create(
-        pParentInspectionContext->InspectionSession(),
-        pParentInspectionContext->RuntimeInstance(),
-        pParentInspectionContext->Thread(), pParentInspectionContext->Timeout(),
-        FLAGS,
-        pParentInspectionContext->FuncEvalFlags(),
-        pParentInspectionContext->Radix(), pParentInspectionContext->Language(),
-        pParentInspectionContext->ReturnValue(),
-        (Evaluation::DkmCompiledVisualizationData *)nullptr,
-        Evaluation::DkmCompiledVisualizationDataPriority::None,
-        pParentInspectionContext->ReturnValues(),
-        pParentInspectionContext->SymbolsConnection(), &pInspectionContext);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
+  CComPtr<DkmInspectionContext> pInspectionContext;
+  hr = DkmInspectionContext::Create(
+      pParentInspectionContext->InspectionSession(),
+      pParentInspectionContext->RuntimeInstance(),
+      pParentInspectionContext->Thread(), pParentInspectionContext->Timeout(),
+      FLAGS, pParentInspectionContext->FuncEvalFlags(),
+      pParentInspectionContext->Radix(), pParentInspectionContext->Language(),
+      pParentInspectionContext->ReturnValue(),
+      (Evaluation::DkmCompiledVisualizationData *)nullptr,
+      Evaluation::DkmCompiledVisualizationDataPriority::None,
+      pParentInspectionContext->ReturnValues(),
+      pParentInspectionContext->SymbolsConnection(), &pInspectionContext);
+  if (FAILED(hr)) {
+    return hr;
+  }
 
-    CComPtr<DkmEvaluationResult> pEEEvaluationResult;
-    hr = pVisualizedExpression->EvaluateExpressionCallback(
-        pInspectionContext,
-        pLanguageExpression,
-        pVisualizedExpression->StackFrame(),
-        &pEEEvaluationResult
-        );
-    if (FAILED(hr))
-    {
-        return hr;
-    }
+  CComPtr<DkmEvaluationResult> pEEEvaluationResult;
+  hr = pVisualizedExpression->EvaluateExpressionCallback(
+      pInspectionContext, pLanguageExpression,
+      pVisualizedExpression->StackFrame(), &pEEEvaluationResult);
+  if (FAILED(hr)) {
+    return hr;
+  }
 
-    *ppDefaultEvaluationResult = pEEEvaluationResult.Detach();
-    return S_OK;
+  *ppDefaultEvaluationResult = pEEEvaluationResult.Detach();
+  return S_OK;
 }
 
 HRESULT
 CCppCustomVisualizerService::evaluate_entity(
     Evaluation::DkmVisualizedExpression *pVisualizedExpression,
-    Evaluation::DkmPointerValueHome *pPointerValueHome, vector<wstring> &out) {
+    Evaluation::DkmPointerValueHome *pPointerValueHome, vector<name_and_expr> &out) {
+  out.clear();
   HRESULT hr;
   const UINT64 entity_address = pPointerValueHome->Address();
   CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
@@ -253,8 +236,8 @@ CCppCustomVisualizerService::evaluate_entity(
               L"struct entity*)0x%08x%08x)",
               static_cast<DWORD>(entity_address >> 32),
               static_cast<DWORD>(entity_address));
-  hr = EvaluateOtherExpression(pVisualizedExpression, (LPCTSTR)expr,
-                               &pEEEvaluationResultOther);
+  hr = EvaluateOtherExpression(pVisualizedExpression, DkmEvaluationFlags::None,
+                               (LPCTSTR)expr, &pEEEvaluationResultOther);
   if (FAILED(hr)) {
     return hr;
   }
@@ -271,10 +254,21 @@ CCppCustomVisualizerService::evaluate_entity(
   val = wcschr(val, L'"');
   ++val;
   const wchar_t *res = val;
+  wstring name;
 
-  while ((res = wcspbrk(val, L",\0"))) {
+  while ((res = wcspbrk(val, L"',\0"))) {
+    if ( *res == L'\'' ) {
+      ++res;
+      const wchar_t* end = wcschr( res, L'\'' );
+      //'end' must be valid
+      name.assign( res, end );
+      res = end + 1;
+      val = res;
+      continue;
+    }
     if (res != val) {
-      out.push_back(wstring(val, res));
+      out.push_back( { name,wstring(val, res) } );
+      name.clear();
     }
     if (*res == L'\0') {
       break;
@@ -310,7 +304,7 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetChildren(
         return E_NOTIMPL;
     }
 
-    vector<wstring> comps;
+    vector<name_and_expr> comps;
     hr = evaluate_entity(pVisualizedExpression, pPointerValueHome, comps);
     if (FAILED(hr)) {
       return hr;
@@ -342,25 +336,58 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetItems(
       Evaluation::DkmPointerValueHome::TryCast(
           pVisualizedExpression->ValueHome());
 
-  vector<wstring> comps;
+  vector<name_and_expr> comps;
   hr = evaluate_entity(pVisualizedExpression, pPointerValueHome, comps);
   if (FAILED(hr)) {
     return hr;
   }
 
   for (UINT32 i = StartIndex; i < StartIndex + Count; ++i) {
-    const wstring& expr = comps[i];
+    const name_and_expr& expr = comps[i];
     DkmChildVisualizedExpression **children = pItems->Members;
     DkmChildVisualizedExpression **pChild = &children[i];
 
     CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
-    hr = EvaluateOtherExpression(pVisualizedExpression, expr.c_str(),
-                                 &pEEEvaluationResultOther);
+    hr =
+        EvaluateOtherExpression(pVisualizedExpression, DkmEvaluationFlags::None,
+                                expr._expr.c_str(), &pEEEvaluationResultOther);
 
     if ( pEEEvaluationResultOther->TagValue() == DkmEvaluationResult::Tag::SuccessResult ) {
       DkmSuccessEvaluationResult* success = DkmSuccessEvaluationResult::TryCast( pEEEvaluationResultOther );
-      int i = 0;
-      ++i;
+      if (!expr._name.empty()) {
+        CComPtr<DkmString> pName;
+        hr = DkmString::Create(DkmSourceString(expr._name.c_str()), &pName);
+        if (FAILED(hr))
+        {
+          return hr;
+        }
+
+        CComPtr<DkmSuccessEvaluationResult> pNamedEEEvaluationResultOther;
+
+        // Custom name
+        hr = DkmSuccessEvaluationResult::Create(
+            success->InspectionContext(),
+            success->StackFrame(),
+            pName,
+            success->FullName(),
+
+            success->Flags(),
+            success->Value(),
+            success->EditableValue(),
+            success->Type(),
+            success->Category(),
+            success->Access(),
+            success->StorageType(),
+            success->TypeModifierFlags(),
+            success->Address(),
+            nullptr,
+            (DkmReadOnlyCollection<DkmModuleInstance*>*)nullptr,
+            DkmDataItem::Null(),
+            &pNamedEEEvaluationResultOther
+        );
+
+        pEEEvaluationResultOther = pNamedEEEvaluationResultOther.Detach();
+      }
     }
 
     DkmChildVisualizedExpression::Create(

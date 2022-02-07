@@ -44,14 +44,15 @@ const char* entity_manager_get_visualizer_data(entity_manager *mgr,
   if (c1) {
     offset += snprintf(
         visualizer_buffer + offset, WC_ARR_LEN(visualizer_buffer) - offset,
-        "*((cool_comp_1*)0x%llx),", reinterpret_cast<uint64_t>(c1));
+        "'name'*((cool_comp_1*)0x%llx),", reinterpret_cast<uint64_t>(c1));
   }
   if (c2) {
     offset += snprintf(
         visualizer_buffer + offset, WC_ARR_LEN(visualizer_buffer) - offset,
-        "*((cool_comp_2*)0x%llx),", reinterpret_cast<uint64_t>(c2));
+        "'friends'*((cool_comp_2*)0x%llx),", reinterpret_cast<uint64_t>(c2));
   }
 
   visualizer_buffer[offset] = '\0';
   return visualizer_buffer;
 }
+
