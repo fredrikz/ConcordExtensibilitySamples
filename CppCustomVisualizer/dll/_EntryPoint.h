@@ -7,6 +7,8 @@
 // COM object exported from the sample dll.
 
 #include "CppCustomVisualizer.Contract.h"
+#include <vector>
+#include <string>
 
 struct entity;
 class ATL_NO_VTABLE CCppCustomVisualizerService :
@@ -74,6 +76,12 @@ public:
         _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
         _Deref_out_opt_ DkmString** ppStringValue
         );
+
+  private:
+    HRESULT
+    evaluate_entity(Evaluation::DkmVisualizedExpression *pVisualizedExpression,
+                    Evaluation::DkmPointerValueHome *pPointerValueHome,
+                    std::vector<std::wstring> &out);
 };
 
 OBJECT_ENTRY_AUTO(CCppCustomVisualizerService::ClassId, CCppCustomVisualizerService)

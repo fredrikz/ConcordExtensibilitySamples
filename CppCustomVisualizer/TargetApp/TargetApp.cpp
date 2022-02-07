@@ -21,6 +21,15 @@ public:
     }
 };
 
+struct almost_entity {
+  uint32_t _id;
+  uint16_t _generation;
+  uint16_t _type;
+
+  cool_comp_1 _cool_comp_1;
+  cool_comp_2 _cool_comp_2;
+};
+
 entity_manager* s_entity_manager = nullptr;
 
 int wmain(int argc, WCHAR *argv[]) {
@@ -53,6 +62,13 @@ int wmain(int argc, WCHAR *argv[]) {
 
   entity *pPointerTest1 = ents + 3;
   entity *pPointerTest2 = nullptr;
+
+  almost_entity ae{};
+  ae._id = ents[3]._id;
+  ae._generation = ents[3]._generation;
+  ae._type = ents[3]._type;
+  ae._cool_comp_1 = c1s[3];
+  ae._cool_comp_2 = c2s[3];
 
   MyClass c(ents[0], 12);
 

@@ -7,6 +7,8 @@
 #include "_EntryPoint.h"
 #include "../TargetApp/entity.h"
 
+using namespace std;
+
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateVisualizedExpression(
     _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
     _Deref_out_opt_ Evaluation::DkmEvaluationResult** ppResultObject
@@ -239,6 +241,50 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::EvaluateOtherExpression(
     return S_OK;
 }
 
+HRESULT
+CCppCustomVisualizerService::evaluate_entity(
+    Evaluation::DkmVisualizedExpression *pVisualizedExpression,
+    Evaluation::DkmPointerValueHome *pPointerValueHome, vector<wstring> &out) {
+  HRESULT hr;
+  const UINT64 entity_address = pPointerValueHome->Address();
+  CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
+  CString expr;
+  expr.Format(L"entity_manager_get_visualizer_data(s_entity_manager,(const "
+              L"struct entity*)0x%08x%08x)",
+              static_cast<DWORD>(entity_address >> 32),
+              static_cast<DWORD>(entity_address));
+  hr = EvaluateOtherExpression(pVisualizedExpression, (LPCTSTR)expr,
+                               &pEEEvaluationResultOther);
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  if (pEEEvaluationResultOther->TagValue() !=
+      DkmEvaluationResult::Tag::SuccessResult) {
+    return E_NOTIMPL;
+  }
+
+  DkmSuccessEvaluationResult *success =
+      DkmSuccessEvaluationResult::TryCast(pEEEvaluationResultOther);
+  DkmString *success_value = success->Value();
+  const wchar_t *val = success_value->Value();
+  val = wcschr(val, L'"');
+  ++val;
+  const wchar_t *res = val;
+
+  while ((res = wcspbrk(val, L",\0"))) {
+    if (res != val) {
+      out.push_back(wstring(val, res));
+    }
+    if (*res == L'\0') {
+      break;
+    }
+    val = res + 1;
+  }
+
+  return S_OK;
+}
+
 // NOTE: https://github.com/microsoft/cppwinrt/blob/master/natvis/object_visualizer.cpp has a good sample of this
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetChildren(
     _In_ Evaluation::DkmVisualizedExpression* pVisualizedExpression,
@@ -264,43 +310,21 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetChildren(
         return E_NOTIMPL;
     }
 
-    const UINT64 entity_address = pPointerValueHome->Address();
-    CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
-    CString expr;
-    expr.Format(L"entity_manager_get_visualizer_data(s_entity_manager,(const "
-                L"struct entity*)0x%08x%08x)",
-                static_cast<DWORD>(entity_address >> 32),
-                static_cast<DWORD>(entity_address));
-    hr = EvaluateOtherExpression(pVisualizedExpression, (LPCTSTR)expr,
-                                 &pEEEvaluationResultOther);
+    vector<wstring> comps;
+    hr = evaluate_entity(pVisualizedExpression, pPointerValueHome, comps);
     if (FAILED(hr)) {
       return hr;
     }
 
-    if ( pEEEvaluationResultOther->TagValue() == DkmEvaluationResult::Tag::SuccessResult ) {
-      DkmSuccessEvaluationResult* success = DkmSuccessEvaluationResult::TryCast( pEEEvaluationResultOther );
-      DkmString* success_value = success->Value();
+    (void)InitialRequestSize;
+    CComPtr<DkmEvaluationResultEnumContext> pEnumContext;
+    hr = DkmEvaluationResultEnumContext::Create(
+        UINT32(comps.size()), pVisualizedExpression->StackFrame(),
+        pInspectionContext, DkmDataItem::Null(), &pEnumContext);
+    DkmAllocArray(0, pInitialChildren);
+    *ppEnumContext = pEnumContext.Detach();
 
-      const wchar_t num = *(wcschr( success_value->Value(), L'"' ) + 1);
-
-      UINT32 max_out = InitialRequestSize;
-      if ( num >= L'0' && num <= L'9' ) {
-        max_out = UINT32(num - L'0');
-      }
-      else {
-        max_out = 0;
-      }
-
-      CComPtr<DkmEvaluationResultEnumContext> pEnumContext;
-      hr = DkmEvaluationResultEnumContext::Create(
-          max_out, pVisualizedExpression->StackFrame(), pInspectionContext,
-          DkmDataItem::Null(), &pEnumContext);
-      DkmAllocArray(0, pInitialChildren);
-      *ppEnumContext = pEnumContext.Detach();
-
-      return S_OK;
-    }
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetItems(
@@ -317,14 +341,20 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetItems(
   Evaluation::DkmPointerValueHome *pPointerValueHome =
       Evaluation::DkmPointerValueHome::TryCast(
           pVisualizedExpression->ValueHome());
+
+  vector<wstring> comps;
+  hr = evaluate_entity(pVisualizedExpression, pPointerValueHome, comps);
+  if (FAILED(hr)) {
+    return hr;
+  }
+
   for (UINT32 i = StartIndex; i < StartIndex + Count; ++i) {
+    const wstring& expr = comps[i];
     DkmChildVisualizedExpression **children = pItems->Members;
     DkmChildVisualizedExpression **pChild = &children[i];
 
     CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
-    CString expr;
-    expr.Format(L"\"Comp %i\"", i);
-    hr = EvaluateOtherExpression(pVisualizedExpression, (LPCTSTR)expr,
+    hr = EvaluateOtherExpression(pVisualizedExpression, expr.c_str(),
                                  &pEEEvaluationResultOther);
 
     if ( pEEEvaluationResultOther->TagValue() == DkmEvaluationResult::Tag::SuccessResult ) {
