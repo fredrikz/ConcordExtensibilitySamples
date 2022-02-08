@@ -23,17 +23,18 @@ entity entity_manager_create_entity( entity_manager* mgr, const cool_comp_1* c1,
 static char visualizer_buffer[16 * 1024];
 const char* entity_manager_get_visualizer_data(entity_manager *mgr,
                                                   const entity *e) {
+  visualizer_buffer[0] = '\0';
   if (e->_id == 0) {
-    return "<null>";
+    return visualizer_buffer;
   }
 
   if (mgr == nullptr) {
-    return "<No entity manager>";
+    return visualizer_buffer;
   }
 
   if (find(mgr->_entities.begin(), mgr->_entities.end(), *e) ==
       mgr->_entities.end()) {
-    return "<Invalid entity>";
+    return visualizer_buffer;
   }
 
   // HAXX

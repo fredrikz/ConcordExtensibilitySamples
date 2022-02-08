@@ -59,7 +59,7 @@ CCppCustomVisualizerService::EvaluateVisualizedExpression(
 
   CComPtr<DkmEvaluationResult> pEEEvaluationResultOther;
   CString expr;
-  expr.Format(L"(struct entity*)0x%08x%08x",
+  expr.Format(L"*((struct entity*)0x%08x%08x)",
               static_cast<DWORD>(entity_address >> 32),
               static_cast<DWORD>(entity_address));
   hr = EvaluateOtherExpression(pVisualizedExpression,
@@ -294,34 +294,32 @@ HRESULT STDMETHODCALLTYPE CCppCustomVisualizerService::GetItems(
     hr =
         EvaluateOtherExpression(pVisualizedExpression, DkmEvaluationFlags::None,
                                 expr._expr.c_str(), &pEEEvaluationResultOther);
+    CComPtr<DkmString> pName;
+    hr = DkmString::Create(DkmSourceString(expr._name.c_str()), &pName);
+    if (FAILED(hr)) {
+      return hr;
+    }
 
     /*
     if (pEEEvaluationResultOther->TagValue() ==
-        DkmEvaluationResult::Tag::SuccessResult) {
+            DkmEvaluationResult::Tag::SuccessResult &&
+        !expr._name.empty()) {
       DkmSuccessEvaluationResult *success =
           DkmSuccessEvaluationResult::TryCast(pEEEvaluationResultOther);
 
-      if (!expr._name.empty()) {
-        CComPtr<DkmString> pName;
-        hr = DkmString::Create(DkmSourceString(expr._name.c_str()), &pName);
-        if (FAILED(hr)) {
-          return hr;
-        }
+      CComPtr<DkmSuccessEvaluationResult> pNamedEEEvaluationResultOther;
 
-        CComPtr<DkmSuccessEvaluationResult> pNamedEEEvaluationResultOther;
+      // Custom name
+      hr = DkmSuccessEvaluationResult::Create(
+          success->InspectionContext(), success->StackFrame(), success->Name(),
+          success->FullName(), success->Flags(), success->Value(),
+          success->EditableValue(), success->Type(), success->Category(),
+          success->Access(), success->StorageType(),
+          success->TypeModifierFlags(), success->Address(),
+          success->CustomUIVisualizers(), success->ExternalModules(),
+          DkmDataItem::Null(), &pNamedEEEvaluationResultOther);
 
-        // Custom name
-        hr = DkmSuccessEvaluationResult::Create(
-            success->InspectionContext(), success->StackFrame(), pName,
-            success->FullName(), success->Flags(), success->Value(),
-            success->EditableValue(), success->Type(), success->Category(),
-            success->Access(), success->StorageType(),
-            success->TypeModifierFlags(), success->Address(),
-            success->CustomUIVisualizers(), success->ExternalModules(),
-            DkmDataItem::Null(), &pNamedEEEvaluationResultOther);
-
-        pEEEvaluationResultOther = pNamedEEEvaluationResultOther;
-      }
+      pEEEvaluationResultOther = pNamedEEEvaluationResultOther.Detach();
     }
     */
 
